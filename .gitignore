@@ -1,0 +1,10 @@
+.stack-work/
+dist-newstyle/
+dist/
+*~
+*.o
+*.hi
+*.chi
+*.chs.h
+.ghc.environment.*
+.stack-work-prof/
