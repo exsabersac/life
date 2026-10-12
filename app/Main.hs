@@ -1,12 +1,16 @@
 {-# LANGUAGE OverloadedStrings #-}
--- | SDL2 shell: draw a CA grid, pause/step, speed, mouse edit, cycle B/S presets.
+-- | SDL2 shell: draw a CA grid, pause/step, speed, mouse edit, cycle B/S presets,
+-- cycle built-in patterns, save/load @.cells@.
 --
 -- Controls:
 --   Space  pause / resume
 --   N      single step (pauses)
 --   Tab    cycle rule presets (Conway → HighLife → Seeds)
 --   +/-    speed up / down
---   G      load glider
+--   P      cycle built-in patterns (centred)
+--   G      load glider (near origin)
+--   S      save grid to life-save.cells (or $LIFE_SAVE)
+--   L      load grid from same path
 --   R      clear grid
 --   click  toggle cell (pauses)
 --   Esc/Q  quit
@@ -18,30 +22,38 @@ import           Control.Concurrent (threadDelay)
 import           Control.Monad      (when)
 import           Data.IORef
 import qualified Data.Text          as T
+import qualified Data.Text.IO       as TIO
 import           Foreign.C.Types    (CInt)
 import           SDL
 import           System.Environment (lookupEnv)
+import           System.IO          (hPutStrLn, stderr)
 
+import           Life.Cells
 import           Life.Grid
+import           Life.Pattern
 import           Life.Rule
 import           Life.Step          (step)
 
 data World = World
-  { wGrid      :: !Grid
-  , wRule      :: !Rule
-  , wRuleLabel :: !String
-  , wPresetIx  :: !Int
-  , wPaused    :: !Bool
-  , wSpeed     :: !Int  -- generations per second when running (1..30)
-  , wAccMs     :: !Int
-  , wCellPx    :: !Int
-  , wQuit      :: !Bool
+  { wGrid       :: !Grid
+  , wRule       :: !Rule
+  , wRuleLabel  :: !String
+  , wPresetIx   :: !Int
+  , wPatternIx  :: !Int
+  , wPaused     :: !Bool
+  , wSpeed      :: !Int  -- generations per second when running (1..30)
+  , wAccMs      :: !Int
+  , wCellPx     :: !Int
+  , wQuit       :: !Bool
   }
 
 defaultW, defaultH, defaultCell :: Int
 defaultW = 40
 defaultH = 30
 defaultCell = 16
+
+defaultSavePath :: FilePath
+defaultSavePath = "life-save.cells"
 
 main :: IO ()
 main = do
@@ -52,7 +64,7 @@ main = do
         if seedGlider
           then glider defaultW defaultH
           else emptyGrid defaultW defaultH
-      world0 = World grid0 rule0 label0 0 True 5 0 defaultCell False
+      world0 = World grid0 rule0 label0 0 0 True 5 0 defaultCell False
 
   initializeAll
   let winW = fromIntegral (defaultW * defaultCell) :: CInt
@@ -96,6 +108,11 @@ advance w
           g' = iterate (step (wRule w)) (wGrid w) !! gens
       in w { wGrid = g', wAccMs = acc' }
 
+savePath :: IO FilePath
+savePath = do
+  m <- lookupEnv "LIFE_SAVE"
+  pure $ maybe defaultSavePath id m
+
 handleEvent :: IORef World -> Event -> IO ()
 handleEvent ref ev =
   case eventPayload ev of
@@ -113,6 +130,20 @@ handleEvent ref ev =
               w { wGrid = emptyGrid (gridWidth (wGrid w)) (gridHeight (wGrid w)) }
             KeycodeG      -> modifyIORef' ref $ \w ->
               w { wGrid = glider (gridWidth (wGrid w)) (gridHeight (wGrid w)), wPaused = True }
+            KeycodeP      -> modifyIORef' ref cyclePattern
+            KeycodeS      -> do
+              path <- savePath
+              w <- readIORef ref
+              TIO.writeFile path (encodeCells (wGrid w))
+              hPutStrLn stderr ("saved " ++ path)
+            KeycodeL      -> do
+              path <- savePath
+              txt <- TIO.readFile path
+              case decodeCells txt of
+                Left err -> hPutStrLn stderr ("load failed: " ++ err)
+                Right g  -> do
+                  modifyIORef' ref $ \w -> w { wGrid = g, wPaused = True }
+                  hPutStrLn stderr ("loaded " ++ path)
             KeycodeTab    -> modifyIORef' ref cyclePreset
             KeycodeEquals -> modifyIORef' ref $ \w ->
               w { wSpeed = min 30 (wSpeed w + 1) }
@@ -139,6 +170,14 @@ cyclePreset w =
   let ix = (wPresetIx w + 1) `mod` length presets
       (label, rule) = presets !! ix
   in w { wPresetIx = ix, wRule = rule, wRuleLabel = label, wPaused = True }
+
+cyclePattern :: World -> World
+cyclePattern w =
+  let n = length catalog
+      ix = wPatternIx w `mod` n
+      p = catalog !! ix
+      g = stampCentered p (gridWidth (wGrid w)) (gridHeight (wGrid w))
+  in w { wPatternIx = (ix + 1) `mod` n, wGrid = g, wPaused = True }
 
 draw :: Renderer -> World -> IO ()
 draw renderer w = do

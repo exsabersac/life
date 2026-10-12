@@ -8,3 +8,4 @@ dist/
 *.chs.h
 .ghc.environment.*
 .stack-work-prof/
+life-save.cells

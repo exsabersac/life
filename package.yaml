@@ -37,6 +37,8 @@ library:
   - Life.Rule
   - Life.Grid
   - Life.Step
+  - Life.Pattern
+  - Life.Cells
 
 executables:
   life-sdl:

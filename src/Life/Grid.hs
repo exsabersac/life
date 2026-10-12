@@ -11,7 +11,6 @@ module Life.Grid
   , toggleCell
   , fromAliveCoords
   , aliveCoords
-  , glider
   ) where
 
 import           Data.Array (Array, array, bounds, listArray, (!), (//))
@@ -88,12 +87,3 @@ aliveCoords g =
   , x <- [0 .. gridWidth g - 1]
   , getCell g (x, y) == Alive
   ]
-
--- | Classic glider (facing down-right) placed near the origin.
-glider :: Width -> Height -> Grid
-glider w h =
-  fromAliveCoords w h
-    [ (1, 0)
-    , (2, 1)
-    , (0, 2), (1, 2), (2, 2)
-    ]

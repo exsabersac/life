@@ -4,11 +4,14 @@ module Main
   ) where
 
 import           Data.List       (sort)
+import qualified Data.Text       as T
 import           Test.Tasty      (TestTree, defaultMain, testGroup)
 import           Test.Tasty.HUnit
 import           Test.Tasty.QuickCheck
 
+import           Life.Cells
 import           Life.Grid
+import           Life.Pattern
 import           Life.Rule
 import           Life.Step
 import           Life.Types      (Cell (..))
@@ -21,6 +24,8 @@ tests = testGroup "life"
   [ ruleTests
   , gridTests
   , stepTests
+  , patternTests
+  , cellsTests
   , qcTests
   ]
 
@@ -92,6 +97,90 @@ stepTests = testGroup "Step"
       sort (aliveCoords g4) @?= sort (aliveCoords shifted)
   ]
 
+patternTests :: TestTree
+patternTests = testGroup "Pattern"
+  [ testCase "catalog names" $
+      map patternName catalog
+        @?= ["glider", "blinker", "toad", "beacon", "pulsar", "lwss"]
+  , testCase "gliderP alive count" $
+      length (patternCells gliderP) @?= 5
+  , testCase "blinker stamped oscillates period 2" $ do
+      let g0 = stampPattern blinkerP (1, 1) 7 7
+          g2 = stepN 2 conway g0
+      sort (aliveCoords g2) @?= sort (aliveCoords g0)
+      length (aliveCoords g0) @?= 3
+  , testCase "toad period 2" $ do
+      let g0 = stampCentered toadP 10 10
+      sort (aliveCoords (stepN 2 conway g0)) @?= sort (aliveCoords g0)
+  , testCase "beacon period 2" $ do
+      let g0 = stampCentered beaconP 10 10
+      sort (aliveCoords (stepN 2 conway g0)) @?= sort (aliveCoords g0)
+  , testCase "pulsar has 48 cells and period 3" $ do
+      length (patternCells pulsarP) @?= 48
+      let g0 = stampCentered pulsarP 20 20
+          g3 = stepN 3 conway g0
+      length (aliveCoords g0) @?= 48
+      sort (aliveCoords g3) @?= sort (aliveCoords g0)
+  , testCase "lwss has 9 cells" $
+      length (patternCells lwssP) @?= 9
+  , testCase "placeOn clips out of bounds" $ do
+      let g = placeOn gliderP (8, 8) (emptyGrid 10 10)
+      -- only cells that land inside survive
+      assertBool "some cells placed" (not (null (aliveCoords g)))
+      assertBool "all in bounds" (all (\(x, y) -> x >= 0 && x < 10 && y >= 0 && y < 10) (aliveCoords g))
+  , testCase "pulsar on tiny grid clips cleanly" $ do
+      let g = stampCentered pulsarP 5 5
+      assertBool "width preserved" (gridWidth g == 5)
+      assertBool "fewer than 48 fit" (length (aliveCoords g) < 48)
+  ]
+
+cellsTests :: TestTree
+cellsTests = testGroup "Cells"
+  [ testCase "round-trip empty grid" $ do
+      let g = emptyGrid 4 3
+      decodeCells (encodeCells g) @?= Right g
+  , testCase "round-trip glider" $ do
+      let g = glider 10 8
+      decodeCells (encodeCells g) @?= Right g
+  , testCase "round-trip pulsar stamp" $ do
+      let g = stampCentered pulsarP 20 20
+      decodeCells (encodeCells g) @?= Right g
+  , testCase "accept * as alive" $
+      case decodeCells "*.\n.*" of
+        Right g -> sort (aliveCoords g) @?= [(0, 0), (1, 1)]
+        Left e  -> assertFailure e
+  , testCase "skip comments and blanks" $
+      case decodeCells "# hi\n\n!name\n.O.\n..O\nOOO\n" of
+        Right g -> sort (aliveCoords g) @?= sort (aliveCoords (glider 3 3))
+        Left e  -> assertFailure e
+  , testCase "pad short rows" $
+      case decodeCells "O\n.O\n" of
+        Right g -> do
+          gridWidth g @?= 2
+          gridHeight g @?= 2
+          sort (aliveCoords g) @?= [(0, 0), (1, 1)]
+        Left e -> assertFailure e
+  , testCase "#W #H only yields empty grid" $
+      case decodeCells "#W 3\n#H 2\n" of
+        Right g -> do
+          gridWidth g @?= 3
+          gridHeight g @?= 2
+          aliveCoords g @?= []
+        Left e -> assertFailure e
+  , testCase "reject empty input" $
+      case decodeCells "" of
+        Left _  -> pure ()
+        Right _ -> assertFailure "expected Left"
+  , testCase "reject bad character" $
+      case decodeCells "OXO" of
+        Left _  -> pure ()
+        Right _ -> assertFailure "expected Left"
+  , testCase "encode header mentions size" $ do
+      let t = encodeCells (emptyGrid 5 4)
+      assertBool "has W" (T.isInfixOf "#W 5" t)
+      assertBool "has H" (T.isInfixOf "#H 4" t)
+  ]
+
 qcTests :: TestTree
 qcTests = testGroup "QuickCheck"
   [ testProperty "step preserves dimensions" $ \xs ->
@@ -105,4 +194,11 @@ qcTests = testGroup "QuickCheck"
   , testProperty "parse ruleToString idempotent for presets" $
       forAll (elements (map snd presets)) $ \r ->
         parseRule (ruleToString r) == Right r
+  , testProperty "encode/decode round-trip random 6x6" $ \xs ->
+      let cells = take 36 (map (\b -> if b then Alive else Dead) (xs :: [Bool]))
+                  ++ replicate (36 - min 36 (length xs)) Dead
+          g = case mkGrid 6 6 (take 36 cells) of
+                Just grid -> grid
+                Nothing   -> emptyGrid 6 6
+      in decodeCells (encodeCells g) == Right g
   ]

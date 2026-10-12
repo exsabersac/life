@@ -29,6 +29,8 @@ library
       Life.Rule
       Life.Grid
       Life.Step
+      Life.Pattern
+      Life.Cells
   other-modules:
       Paths_life
   autogen-modules:
