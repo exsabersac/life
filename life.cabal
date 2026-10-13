@@ -29,6 +29,8 @@ library
       Life.Rule
       Life.Grid
       Life.Step
+      Life.Stream
+      Life.World
       Life.Pattern
       Life.Cells
   other-modules:

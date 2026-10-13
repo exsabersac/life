@@ -14,7 +14,9 @@ import           Life.Grid
 import           Life.Pattern
 import           Life.Rule
 import           Life.Step
+import           Life.Stream
 import           Life.Types      (Cell (..))
+import           Life.World
 
 main :: IO ()
 main = defaultMain tests
@@ -24,6 +26,8 @@ tests = testGroup "life"
   [ ruleTests
   , gridTests
   , stepTests
+  , streamTests
+  , worldTests
   , patternTests
   , cellsTests
   , qcTests
@@ -97,6 +101,53 @@ stepTests = testGroup "Step"
       sort (aliveCoords g4) @?= sort (aliveCoords shifted)
   ]
 
+streamTests :: TestTree
+streamTests = testGroup "Stream"
+  [ testCase "headS / takeS / splitAtS basics" $ do
+      let s = iterateS (+1) (0 :: Int)
+      headS s @?= 0
+      takeS 5 s @?= [0, 1, 2, 3, 4]
+      let (xs, rest) = splitAtS 3 s
+      xs @?= [0, 1, 2]
+      headS rest @?= 3
+      takeS 0 s @?= []
+      fst (splitAtS (-1) s) @?= []
+  , testCase "findS finds first match" $
+      findS (> 3) (iterateS (+1) (0 :: Int)) @?= 4
+  , testCase "generations head is initial grid" $ do
+      let g0 = glider 10 10
+      headS (generations conway g0) @?= g0
+  , testCase "generations stream matches successive step" $ do
+      let g0 = fromAliveCoords 5 5 [(1, 2), (2, 2), (3, 2)] -- blinker
+          gs = takeS 4 (generations conway g0)
+      gs @?= [g0, step conway g0, stepN 2 conway g0, stepN 3 conway g0]
+  , testCase "generations splitAtS matches stepN" $ do
+      let g0 = glider 20 20
+          g4 = headS (snd (splitAtS 4 (generations conway g0)))
+      g4 @?= stepN 4 conway g0
+  ]
+
+worldTests :: TestTree
+worldTests = testGroup "World"
+  [ testCase "InStepOnce advances one generation and pauses" $ do
+      let g0 = fromAliveCoords 5 5 [(1, 2), (2, 2), (3, 2)]
+          w0 = (initialWorld g0 conway "B3/S23") { wPaused = False }
+          w1 = applyInput InStepOnce w0
+      wPaused w1 @?= True
+      wGrid w1 @?= step conway g0
+  , testCase "tick when paused is identity" $ do
+      let w0 = initialWorld (emptyGrid 4 4) conway "B3/S23"
+      tick 16 w0 @?= w0
+  , testCase "tick unpaused consumes generations via stream" $ do
+      let g0 = fromAliveCoords 5 5 [(1, 2), (2, 2), (3, 2)]
+          -- speed 1000 gens/s, period = 1ms; frameMs=16 → 16 gens
+          w0 = (initialWorld g0 conway "B3/S23") { wPaused = False, wSpeed = 30, wAccMs = 0 }
+          -- period = 1000/30 = 33; frame 16 → gens 0; need more acc
+          w1 = tick 33 w0
+      wGrid w1 @?= step conway g0
+      wAccMs w1 @?= 0
+  ]
+
 patternTests :: TestTree
 patternTests = testGroup "Pattern"
   [ testCase "catalog names" $
@@ -125,7 +176,6 @@ patternTests = testGroup "Pattern"
       length (patternCells lwssP) @?= 9
   , testCase "placeOn clips out of bounds" $ do
       let g = placeOn gliderP (8, 8) (emptyGrid 10 10)
-      -- only cells that land inside survive
       assertBool "some cells placed" (not (null (aliveCoords g)))
       assertBool "all in bounds" (all (\(x, y) -> x >= 0 && x < 10 && y >= 0 && y < 10) (aliveCoords g))
   , testCase "pulsar on tiny grid clips cleanly" $ do
@@ -201,4 +251,9 @@ qcTests = testGroup "QuickCheck"
                 Just grid -> grid
                 Nothing   -> emptyGrid 6 6
       in decodeCells (encodeCells g) == Right g
+  , testProperty "generations !! n via stream == stepN" $
+      forAll (choose (0, 5)) $ \n ->
+        let g0 = glider 12 12
+            viaStream = headS (snd (splitAtS n (generations conway g0)))
+        in viaStream == stepN n conway g0
   ]

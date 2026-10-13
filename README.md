@@ -2,7 +2,7 @@
 
 Haskell cellular automata / Game of Life with **swappable B/S rules** (e.g. `B3/S23`).
 
-Stack project: pure core library + SDL2 executable. Author style aligned with [match3](https://github.com/exsabersac/match3) (`yu binbin` / `exsabersac`, BSD-3-Clause).
+Stack project: pure core library + SDL2 executable. Generations are an infinite lazy `Life.Stream` (`generations`); the SDL shell folds pure `Input`s into `Life.World` and advances with `tick` / `splitAtS`. Author style aligned with [match3](https://github.com/exsabersac/match3) (`yu binbin` / `exsabersac`, BSD-3-Clause).
 
 ## Requirements
 
@@ -46,7 +46,9 @@ Save format is LifeWiki-style plaintext **`.cells`**: `#` / `!` comments, `.` de
 | `Life.Types` | `Cell`, coordinates |
 | `Life.Rule` | Parse / print `B…/S…`, presets |
 | `Life.Grid` | Finite grid, dead-border neighbours |
-| `Life.Step` | `neighborCount`, `step`, `stepN` |
+| `Life.Stream` | Lazy infinite stream (`:>`, `iterateS`, `splitAtS`, …) |
+| `Life.Step` | `neighborCount`, `step`, `stepN`, `generations` |
+| `Life.World` | Pure `World` / `Input` / `applyInput` / `tick` |
 | `Life.Pattern` | Named patterns + `placeOn` / `stampCentered` |
 | `Life.Cells` | `encodeCells` / `decodeCells` (`.cells`) |
 

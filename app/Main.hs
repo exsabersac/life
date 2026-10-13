@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
--- | SDL2 shell: draw a CA grid, pause/step, speed, mouse edit, cycle B/S presets,
--- cycle built-in patterns, save/load @.cells@.
+-- | Thin SDL2 shell: poll events → 'Input's → pure fold / 'tick' → draw.
+--
+-- Simulation time consumes a 'Life.Stream' of generations when unpaused.
 --
 -- Controls:
 --   Space  pause / resume
@@ -30,27 +31,15 @@ import           System.IO          (hPutStrLn, stderr)
 
 import           Life.Cells
 import           Life.Grid
-import           Life.Pattern
-import           Life.Rule
-import           Life.Step          (step)
+import           Life.Pattern       (glider)
+import           Life.Rule          (conway)
+import           Life.World
 
-data World = World
-  { wGrid       :: !Grid
-  , wRule       :: !Rule
-  , wRuleLabel  :: !String
-  , wPresetIx   :: !Int
-  , wPatternIx  :: !Int
-  , wPaused     :: !Bool
-  , wSpeed      :: !Int  -- generations per second when running (1..30)
-  , wAccMs      :: !Int
-  , wCellPx     :: !Int
-  , wQuit       :: !Bool
-  }
-
-defaultW, defaultH, defaultCell :: Int
+defaultW, defaultH, defaultCell, frameMs :: Int
 defaultW = 40
 defaultH = 30
 defaultCell = 16
+frameMs = 16
 
 defaultSavePath :: FilePath
 defaultSavePath = "life-save.cells"
@@ -64,7 +53,7 @@ main = do
         if seedGlider
           then glider defaultW defaultH
           else emptyGrid defaultW defaultH
-      world0 = World grid0 rule0 label0 0 0 True 5 0 defaultCell False
+      world0 = (initialWorld grid0 rule0 label0) { wCellPx = defaultCell }
 
   initializeAll
   let winW = fromIntegral (defaultW * defaultCell) :: CInt
@@ -82,55 +71,43 @@ loop :: Renderer -> Window -> IORef World -> IO ()
 loop renderer window ref = do
   t0 <- ticks
   events <- pollEvents
-  mapM_ (handleEvent ref) events
+  mapM_ (dispatchEvent ref) events
   w <- readIORef ref
   if wQuit w
     then pure ()
     else do
-      let w' = advance w
+      let w' = tick frameMs w
       writeIORef ref w'
       when (wRuleLabel w' /= wRuleLabel w) $
         windowTitle window $= T.pack ("life — " ++ wRuleLabel w')
       draw renderer w'
       t1 <- ticks
       let elapsed = fromIntegral (t1 - t0) :: Int
-          sleepMs = max 0 (16 - elapsed)
+          sleepMs = max 0 (frameMs - elapsed)
       threadDelay (sleepMs * 1000)
       loop renderer window ref
 
-advance :: World -> World
-advance w
-  | wPaused w = w
-  | otherwise =
-      let period = max 1 (1000 `div` max 1 (wSpeed w))
-          acc = wAccMs w + 16
-          (gens, acc') = acc `divMod` period
-          g' = iterate (step (wRule w)) (wGrid w) !! gens
-      in w { wGrid = g', wAccMs = acc' }
-
-savePath :: IO FilePath
-savePath = do
-  m <- lookupEnv "LIFE_SAVE"
-  pure $ maybe defaultSavePath id m
-
-handleEvent :: IORef World -> Event -> IO ()
-handleEvent ref ev =
+-- | Map one SDL event to pure inputs (save/load IO at the edge).
+dispatchEvent :: IORef World -> Event -> IO ()
+dispatchEvent ref ev =
   case eventPayload ev of
-    QuitEvent -> modifyIORef' ref (\w -> w { wQuit = True })
+    QuitEvent ->
+      modifyIORef' ref (applyInput InQuit)
     KeyboardEvent ke
       | keyboardEventKeyMotion ke == Pressed
       , not (keyboardEventRepeat ke) ->
           case keysymKeycode (keyboardEventKeysym ke) of
-            KeycodeEscape -> modifyIORef' ref (\w -> w { wQuit = True })
-            KeycodeQ      -> modifyIORef' ref (\w -> w { wQuit = True })
-            KeycodeSpace  -> modifyIORef' ref (\w -> w { wPaused = not (wPaused w) })
-            KeycodeN      -> modifyIORef' ref $ \w ->
-              w { wGrid = step (wRule w) (wGrid w), wPaused = True }
-            KeycodeR      -> modifyIORef' ref $ \w ->
-              w { wGrid = emptyGrid (gridWidth (wGrid w)) (gridHeight (wGrid w)) }
-            KeycodeG      -> modifyIORef' ref $ \w ->
-              w { wGrid = glider (gridWidth (wGrid w)) (gridHeight (wGrid w)), wPaused = True }
-            KeycodeP      -> modifyIORef' ref cyclePattern
+            KeycodeEscape -> modifyIORef' ref (applyInput InQuit)
+            KeycodeQ      -> modifyIORef' ref (applyInput InQuit)
+            KeycodeSpace  -> modifyIORef' ref (applyInput InTogglePause)
+            KeycodeN      -> modifyIORef' ref (applyInput InStepOnce)
+            KeycodeR      -> modifyIORef' ref (applyInput InClear)
+            KeycodeG      -> modifyIORef' ref (applyInput InLoadGlider)
+            KeycodeP      -> modifyIORef' ref (applyInput InCyclePattern)
+            KeycodeTab    -> modifyIORef' ref (applyInput InCyclePreset)
+            KeycodeEquals -> modifyIORef' ref (applyInput InSpeedUp)
+            KeycodePlus   -> modifyIORef' ref (applyInput InSpeedUp)
+            KeycodeMinus  -> modifyIORef' ref (applyInput InSpeedDown)
             KeycodeS      -> do
               path <- savePath
               w <- readIORef ref
@@ -142,15 +119,8 @@ handleEvent ref ev =
               case decodeCells txt of
                 Left err -> hPutStrLn stderr ("load failed: " ++ err)
                 Right g  -> do
-                  modifyIORef' ref $ \w -> w { wGrid = g, wPaused = True }
+                  modifyIORef' ref (applyInput (InSetGrid g))
                   hPutStrLn stderr ("loaded " ++ path)
-            KeycodeTab    -> modifyIORef' ref cyclePreset
-            KeycodeEquals -> modifyIORef' ref $ \w ->
-              w { wSpeed = min 30 (wSpeed w + 1) }
-            KeycodePlus   -> modifyIORef' ref $ \w ->
-              w { wSpeed = min 30 (wSpeed w + 1) }
-            KeycodeMinus  -> modifyIORef' ref $ \w ->
-              w { wSpeed = max 1 (wSpeed w - 1) }
             _ -> pure ()
       | otherwise -> pure ()
     MouseButtonEvent me
@@ -161,23 +131,14 @@ handleEvent ref ev =
             let px = wCellPx w
                 x = fromIntegral mx `div` px
                 y = fromIntegral my `div` px
-            in w { wGrid = toggleCell (wGrid w) (x, y), wPaused = True }
+            in applyInput (InToggleAt (x, y)) w
       | otherwise -> pure ()
     _ -> pure ()
 
-cyclePreset :: World -> World
-cyclePreset w =
-  let ix = (wPresetIx w + 1) `mod` length presets
-      (label, rule) = presets !! ix
-  in w { wPresetIx = ix, wRule = rule, wRuleLabel = label, wPaused = True }
-
-cyclePattern :: World -> World
-cyclePattern w =
-  let n = length catalog
-      ix = wPatternIx w `mod` n
-      p = catalog !! ix
-      g = stampCentered p (gridWidth (wGrid w)) (gridHeight (wGrid w))
-  in w { wPatternIx = (ix + 1) `mod` n, wGrid = g, wPaused = True }
+savePath :: IO FilePath
+savePath = do
+  m <- lookupEnv "LIFE_SAVE"
+  pure $ maybe defaultSavePath id m
 
 draw :: Renderer -> World -> IO ()
 draw renderer w = do
@@ -194,14 +155,27 @@ draw renderer w = do
   rendererDrawColor renderer $= V4 50 50 64 255
   let wpx = fromIntegral (ww * px) :: CInt
       hpx = fromIntegral (hh * px) :: CInt
-  mapM_ (\x -> drawLine renderer (P (V2 (fromIntegral (x * px)) 0)) (P (V2 (fromIntegral (x * px)) hpx))) [0 .. ww]
-  mapM_ (\y -> drawLine renderer (P (V2 0 (fromIntegral (y * px)))) (P (V2 wpx (fromIntegral (y * px))))) [0 .. hh]
+  mapM_
+    (\x ->
+       drawLine
+         renderer
+         (P (V2 (fromIntegral (x * px)) 0))
+         (P (V2 (fromIntegral (x * px)) hpx)))
+    [0 .. ww]
+  mapM_
+    (\y ->
+       drawLine
+         renderer
+         (P (V2 0 (fromIntegral (y * px))))
+         (P (V2 wpx (fromIntegral (y * px)))))
+    [0 .. hh]
   present renderer
 
 fillCell :: Renderer -> Int -> (Int, Int) -> IO ()
 fillCell r px (x, y) =
-  fillRect r
+  fillRect
+    r
     (Just
-      (Rectangle
-        (P (V2 (fromIntegral (x * px)) (fromIntegral (y * px))))
-        (V2 (fromIntegral px) (fromIntegral px))))
+       (Rectangle
+          (P (V2 (fromIntegral (x * px)) (fromIntegral (y * px))))
+          (V2 (fromIntegral px) (fromIntegral px))))
