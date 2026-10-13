@@ -10,7 +10,7 @@ extra-source-files:
 - README.md
 - LICENSE
 
-description:        Haskell cellular automata / Game of Life with swappable B/S rules (Stack + pure library + SDL2)
+description:        Haskell 元胞自动机 / 生命游戏，可换 B/S 规则（Stack + 纯库 + SDL2）
 
 dependencies:
 - base >= 4.7 && < 5

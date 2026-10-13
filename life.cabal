@@ -6,7 +6,7 @@ cabal-version: 2.2
 
 name:           life
 version:        0.1.0.0
-description:    Haskell cellular automata / Game of Life with swappable B/S rules (Stack + pure library + SDL2)
+description:    Haskell 元胞自动机 / 生命游戏，可换 B/S 规则（Stack + 纯库 + SDL2）
 homepage:       https://github.com/exsabersac/life#readme
 bug-reports:    https://github.com/exsabersac/life/issues
 author:         yu binbin

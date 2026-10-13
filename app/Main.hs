@@ -1,20 +1,20 @@
 {-# LANGUAGE OverloadedStrings #-}
--- | Thin SDL2 shell: poll events → 'Input's → pure fold / 'tick' → draw.
+-- | 薄 SDL2 壳：轮询事件 → 'Input' → 纯折叠 / 'tick' → 绘制。
 --
--- Simulation time consumes a 'Life.Stream' of generations when unpaused.
+-- 未暂停时，仿真时间消费 'Life.Stream' 世代流。
 --
--- Controls:
---   Space  pause / resume
---   N      single step (pauses)
---   Tab    cycle rule presets (Conway → HighLife → Seeds)
---   +/-    speed up / down
---   P      cycle built-in patterns (centred)
---   G      load glider (near origin)
---   S      save grid to life-save.cells (or $LIFE_SAVE)
---   L      load grid from same path
---   R      clear grid
---   click  toggle cell (pauses)
---   Esc/Q  quit
+-- 操作：
+--   空格   暂停 / 继续
+--   N      单步（并暂停）
+--   Tab    循环规则预设（Conway → HighLife → Seeds）
+--   +/-    加速 / 减速
+--   P      循环内置图案（居中）
+--   G      加载滑翔机（靠近原点）
+--   S      保存到 life-save.cells（或 $LIFE_SAVE）
+--   L      从同一路径加载
+--   R      清空网格
+--   点击   切换单元（并暂停）
+--   Esc/Q  退出
 module Main
   ( main
   ) where

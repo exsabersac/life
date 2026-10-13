@@ -1,59 +1,72 @@
 # life
 
-Haskell cellular automata / Game of Life with **swappable B/S rules** (e.g. `B3/S23`).
+Haskell 元胞自动机 / 生命游戏，支持**可换 B/S 规则**（例如 `B3/S23`）。
 
-Stack project: pure core library + SDL2 executable. Generations are an infinite lazy `Life.Stream` (`generations`); the SDL shell folds pure `Input`s into `Life.World` and advances with `tick` / `splitAtS`. Author style aligned with [match3](https://github.com/exsabersac/match3) (`yu binbin` / `exsabersac`, BSD-3-Clause).
+技术栈：**Stack + 纯核心库 + SDL2 可执行文件**。世代推进是惰性无穷流 `Life.Stream`（`generations`）；SDL 壳把纯 `Input` 折叠进 `Life.World`，再用 `tick` / `splitAtS` 抽样前进。写法对齐 [match3](https://github.com/exsabersac/match3) 的 `Engine.Stream`（作者 `yu binbin` / `exsabersac`，BSD-3-Clause）。
 
-## Requirements
+## 依赖
 
 - [Stack](https://docs.haskellstack.org/)
-- System SDL2 development headers (`libsdl2-dev` on Debian/Ubuntu; `brew install sdl2` on macOS)
+- 系统 SDL2 开发头文件（Debian/Ubuntu：`libsdl2-dev`；macOS：`brew install sdl2`）
 
-## Quick start
+## 快速开始
 
 ```sh
-make verify          # stack test — rule parse, neighbours, step, patterns, .cells
-make build           # stack build — library + life-sdl
-stack run life-sdl   # SDL2 window (or: make run)
+make verify          # stack test — 规则解析、邻域、步进、图案、.cells
+make build           # stack build — 库 + life-sdl
+stack run life-sdl   # SDL2 窗口（或：make run）
 ```
 
-Optional: `LIFE_GLIDER=1 stack run life-sdl` starts with a glider.
+可选环境变量：
 
-Resolver: **lts-21.25** (GHC 9.4.8, `sdl2` from Stackage; snapshot fetched via GitHub URL so Stack does not need the USTC mirror).
+| 变量 | 含义 |
+|------|------|
+| `LIFE_GLIDER=1` | 启动时放入滑翔机 |
+| `LIFE_SAVE` | 存档路径（默认 `life-save.cells`） |
 
-## Controls (SDL)
+Resolver：**lts-21.25**（GHC 9.4.8；`sdl2` 来自 Stackage；快照经 GitHub URL 拉取，不依赖 USTC 镜像）。
 
-| Key / input | Action |
-|-------------|--------|
-| Space | Pause / resume |
-| N | Single step (pauses) |
-| Tab | Cycle presets: Conway `B3/S23` → HighLife `B36/S23` → Seeds `B2/S` |
-| + / - | Speed up / down |
-| P | Cycle built-in patterns (centred): glider → blinker → toad → beacon → pulsar → lwss |
-| G | Load glider (near origin) |
-| S | Save grid to `life-save.cells` (or path in `$LIFE_SAVE`) |
-| L | Load grid from the same path |
-| R | Clear grid |
-| Left click | Toggle cell (pauses) |
-| Esc / Q | Quit |
+## 操作（SDL）
 
-Save format is LifeWiki-style plaintext **`.cells`**: `#` / `!` comments, `.` dead, `O` / `*` alive. Files also carry `#W` / `#H` so empty boards round-trip.
+| 按键 / 输入 | 作用 |
+|-------------|------|
+| 空格 | 暂停 / 继续 |
+| N | 单步（并暂停） |
+| Tab | 循环预设规则：Conway `B3/S23` → HighLife `B36/S23` → Seeds `B2/S` |
+| + / - | 加速 / 减速 |
+| P | 循环内置图案（居中）：滑翔机 → 闪烁器 → 蟾蜍 → 信标 → 脉冲星 → LWSS |
+| G | 加载滑翔机（靠近原点） |
+| S | 保存网格到 `life-save.cells`（或 `$LIFE_SAVE`） |
+| L | 从同一路径加载 |
+| R | 清空网格 |
+| 左键点击 | 切换单元格（并暂停） |
+| Esc / Q | 退出 |
 
-## Library layout
+存档格式为 LifeWiki 风格明文 **`.cells`**：`#` / `!` 为注释，`.` 死，`O` / `*` 活。文件还带 `#W` / `#H`，空盘也能往返。
 
-| Module | Role |
-|--------|------|
-| `Life.Types` | `Cell`, coordinates |
-| `Life.Rule` | Parse / print `B…/S…`, presets |
-| `Life.Grid` | Finite grid, dead-border neighbours |
-| `Life.Stream` | Lazy infinite stream (`:>`, `iterateS`, `splitAtS`, …) |
-| `Life.Step` | `neighborCount`, `step`, `stepN`, `generations` |
-| `Life.World` | Pure `World` / `Input` / `applyInput` / `tick` |
-| `Life.Pattern` | Named patterns + `placeOn` / `stampCentered` |
-| `Life.Cells` | `encodeCells` / `decodeCells` (`.cells`) |
+## 模块布局
 
-MVP uses a **dead border** (out-of-bounds = dead). Torus wrapping can come later.
+| 模块 | 职责 |
+|------|------|
+| `Life.Types` | `Cell`、坐标类型 |
+| `Life.Rule` | 解析 / 打印 `B…/S…`、预设 |
+| `Life.Grid` | 有限网格、死边界邻域 |
+| `Life.Stream` | 惰性无穷流（`:>`、`iterateS`、`splitAtS` 等） |
+| `Life.Step` | `neighborCount`、`step`、`stepN`、`generations` |
+| `Life.World` | 纯 `World` / `Input` / `applyInput` / `tick` |
+| `Life.Pattern` | 命名图案 + `placeOn` / `stampCentered` |
+| `Life.Cells` | `encodeCells` / `decodeCells`（`.cells`） |
 
-## License
+### 流式设计说明
 
-BSD-3-Clause. Copyright (c) 2026 yu binbin.
+核心对齐 match3 的 `Engine.Stream`：用无空构造的惰性无穷流表示世代序列。
+
+- `generations rule g0` ≡ `g0 :> step rule g0 :> …`（`iterateS`）
+- 单步 / 多步用 `splitAtS` 取前缀，只强制已消费部分，其余保持 thunk
+- `World.tick` 在未暂停时按帧时间累计，再从流上跳过 `n` 代；SDL 只负责轮询、折叠 `Input`、绘制
+
+MVP 使用**死边界**（越界视为死）。环面边界可后续再加。
+
+## 许可
+
+BSD-3-Clause。Copyright (c) 2026 yu binbin。

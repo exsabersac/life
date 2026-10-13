@@ -1,5 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
--- | LifeWiki-style plaintext @.cells@ encoding ( @.@ / @O@ / @*@ , @#@/@!@ comments).
+-- | LifeWiki 风格明文 @.cells@ 编解码（@.@ / @O@ / @*@，@#@/@!@ 注释）。
+--
+-- 写出时附带 @#W@ / @#H@，空盘也能往返。
 module Life.Cells
   ( encodeCells
   , decodeCells
@@ -11,7 +13,7 @@ import qualified Data.Text as T
 import           Life.Grid (Grid, getCell, gridHeight, gridWidth, mkGrid)
 import           Life.Types (Cell (..))
 
--- | Encode the full grid as @.cells@ rows (@O@ alive, @.@ dead), with a short header.
+-- | 将整盘编码为 @.cells@ 行（@O@ 活、@.@ 死），带简短文件头。
 encodeCells :: Grid -> Text
 encodeCells g =
   let w = gridWidth g
@@ -33,12 +35,11 @@ encodeCells g =
     cellChar Alive = 'O'
     cellChar Dead  = '.'
 
--- | Decode @.cells@ text into a grid.
+-- | 将 @.cells@ 文本解码为网格。
 --
--- Skips blank lines and comments (@#@ / @!@). Data lines use @.@ (dead) and
--- @O@/@*@ (alive); other non-space characters are rejected. Shorter rows are
--- padded with dead cells to the maximum row width. Optional @#W@ / @#H@ comments
--- set dimensions when there is no cell data (all-dead grid) or enlarge the canvas.
+-- 跳过空行与注释（@#@ / @!@）。数据行：@.@ 死，@O@/@*@ 活；其它非空白字符报错。
+-- 较短行用死单元补齐到最大行宽。可选 @#W@ / @#H@ 在无数据（全死盘）时定尺寸，
+-- 或扩大画布。
 decodeCells :: Text -> Either String Grid
 decodeCells txt = do
   let rawLines = T.lines txt

@@ -1,7 +1,7 @@
--- | Lazy infinite streams (same small surface as match3's Engine.Stream; no dependency).
+-- | 惰性无穷流（与 match3 的 @Engine.Stream@ 同一小套接口，无项目依赖）。
 --
--- Unlike lists there is no empty constructor, so 'headS' / 'findS' / 'splitAtS' are total.
--- Only the consumed prefix is forced; the rest stays as a thunk.
+-- 与列表不同：没有空构造，因此 'headS' / 'findS' / 'splitAtS' 都是全函数。
+-- 只强制已消费的前缀，其余保持 thunk。
 module Life.Stream
   ( Stream (..)
   , unfoldS
@@ -14,34 +14,35 @@ module Life.Stream
 
 infixr 5 :>
 
--- | Infinite stream: one element followed by another stream. Never empty.
+-- | 无穷流：一个元素后接另一条流。永不为空。
 data Stream a = a :> Stream a
 
--- | Anamorphism: seed @s@ yields one element and the next seed.
+-- | 余代数：种子 @s@ 产出一个元素与下一枚种子。
 unfoldS :: (s -> (a, s)) -> s -> Stream a
 unfoldS step = go
   where
     go s = let (a, s') = step s in a :> go s'
 
--- | @x@, @f x@, @f (f x)@, …
+-- | @x@、@f x@、@f (f x)@、…
 iterateS :: (a -> a) -> a -> Stream a
 iterateS f = unfoldS (\x -> (x, f x))
 
+-- | 流头（全函数：流永不为空）。
 headS :: Stream a -> a
 headS (a :> _) = a
 
--- | First @n@ elements (@n <= 0@ → empty list).
+-- | 取前 @n@ 个元素（@n <= 0@ → 空列表）。
 takeS :: Int -> Stream a -> [a]
 takeS n = fst . splitAtS n
 
--- | First @n@ elements and the remainder (@n <= 0@ → empty prefix).
+-- | 前 @n@ 个元素与剩余流（@n <= 0@ → 空前缀）。
 splitAtS :: Int -> Stream a -> ([a], Stream a)
 splitAtS n s | n <= 0 = ([], s)
 splitAtS n (a :> rest) =
   let (xs, s') = splitAtS (n - 1) rest
   in (a : xs, s')
 
--- | First element satisfying the predicate (keeps searching forever if none).
+-- | 第一个满足谓词的元素（若永不满足则一直搜索）。
 findS :: (a -> Bool) -> Stream a -> a
 findS ok = go
   where

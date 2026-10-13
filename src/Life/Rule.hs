@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
--- | Birth / Survive (B/S) rule parsing and lookup.
+-- | 出生 / 存活（B/S）规则解析与查询。
 --
--- Examples: @B3/S23@ (Conway), @B36/S23@ (HighLife), @B2/S@ (Seeds).
+-- 示例：@B3/S23@（Conway）、@B36/S23@（HighLife）、@B2/S@（Seeds）。
 module Life.Rule
   ( Rule (..)
   , parseRule
@@ -21,28 +21,33 @@ import qualified Data.Set  as Set
 import           Data.Text (Text)
 import qualified Data.Text as T
 
--- | Moore-neighbour B/S rule: birth counts and survival counts (0–8).
+-- | Moore 邻域 B/S 规则：出生邻居数集合与存活邻居数集合（0–8）。
 data Rule = Rule
   { birth   :: !(Set Int)
   , survive :: !(Set Int)
   } deriving (Eq, Show)
 
+-- | 死单元在邻居数 @n@ 时是否出生。
 born :: Rule -> Int -> Bool
 born r n = n `Set.member` birth r
 
+-- | 活单元在邻居数 @n@ 时是否存活。
 survives :: Rule -> Int -> Bool
 survives r n = n `Set.member` survive r
 
+-- | Conway 生命游戏：@B3/S23@。
 conway :: Rule
 conway = Rule (Set.fromList [3]) (Set.fromList [2, 3])
 
+-- | HighLife：@B36/S23@。
 highLife :: Rule
 highLife = Rule (Set.fromList [3, 6]) (Set.fromList [2, 3])
 
+-- | Seeds：@B2/S@。
 seeds :: Rule
 seeds = Rule (Set.fromList [2]) Set.empty
 
--- | Named presets for the SDL shell (cycle with a key).
+-- | SDL 壳循环用的命名预设。
 presets :: [(String, Rule)]
 presets =
   [ ("B3/S23",  conway)
@@ -50,6 +55,7 @@ presets =
   , ("B2/S",    seeds)
   ]
 
+-- | 打印为 @B…/S…@ 字符串。
 ruleToString :: Rule -> String
 ruleToString (Rule b s) =
   'B' : digits b ++ '/' : 'S' : digits s
@@ -59,7 +65,7 @@ ruleToString (Rule b s) =
 parseRuleText :: Text -> Either String Rule
 parseRuleText = parseRule . T.unpack
 
--- | Parse @B\<digits\>/S\<digits\>@ (letters case-insensitive; digit lists may be empty).
+-- | 解析 @B\<digits\>/S\<digits\>@（字母大小写不敏感；数字列表可为空）。
 parseRule :: String -> Either String Rule
 parseRule raw =
   let norm = map toUpper (filter (/= ' ') raw)

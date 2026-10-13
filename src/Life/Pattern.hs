@@ -1,4 +1,4 @@
--- | Named Life patterns (relative coords) and placement onto a grid.
+-- | 命名生命图案（相对坐标）及落到网格上的放置。
 module Life.Pattern
   ( Pattern (..)
   , patternExtent
@@ -19,13 +19,13 @@ import           Data.List  (foldl')
 import           Life.Grid  (Grid, emptyGrid, setCell)
 import           Life.Types (Cell (..), Coord, Height, Width)
 
--- | A named set of alive cells in local coordinates (origin top-left of bbox).
+-- | 一组有名存活单元，局部坐标（原点在包围盒左上）。
 data Pattern = Pattern
   { patternName  :: !String
   , patternCells :: ![Coord]
   } deriving (Eq, Show)
 
--- | Inclusive width/height needed to hold all relative cells (at least 1×1).
+-- | 容纳全部相对单元所需的宽高（含端点；至少 1×1）。
 patternExtent :: Pattern -> (Width, Height)
 patternExtent (Pattern _ []) = (1, 1)
 patternExtent (Pattern _ cs) =
@@ -33,17 +33,17 @@ patternExtent (Pattern _ cs) =
       ys = map snd cs
   in (maximum xs - minimum xs + 1, maximum ys - minimum ys + 1)
 
--- | Paint pattern cells as Alive at @offset@; out-of-bounds cells are clipped
--- (via 'setCell'). Does not clear the rest of the grid.
+-- | 在 @offset@ 处把图案单元画为 Alive；越界由 'setCell' 裁剪。
+-- 不清空网格其余部分。
 placeOn :: Pattern -> Coord -> Grid -> Grid
 placeOn (Pattern _ cs) (ox, oy) g =
   foldl' (\g' (dx, dy) -> setCell g' (ox + dx, oy + dy) Alive) g cs
 
--- | Empty grid then place pattern at @offset@.
+-- | 空网格后在 @offset@ 放置图案。
 stampPattern :: Pattern -> Coord -> Width -> Height -> Grid
 stampPattern p off w h = placeOn p off (emptyGrid w h)
 
--- | Empty grid then place pattern centred (clipped if larger than the grid).
+-- | 空网格后居中放置（图案大于网格时会裁剪）。
 stampCentered :: Pattern -> Width -> Height -> Grid
 stampCentered p w h =
   let (pw, ph) = patternExtent p
@@ -51,7 +51,7 @@ stampCentered p w h =
       oy = max 0 ((h - ph) `div` 2)
   in stampPattern p (ox, oy) w h
 
--- | Built-in catalog for SDL cycling (order stable).
+-- | SDL 循环用的内置目录（顺序稳定）。
 catalog :: [Pattern]
 catalog =
   [ gliderP
@@ -62,7 +62,7 @@ catalog =
   , lwssP
   ]
 
--- | Classic glider (facing down-right).
+-- | 经典滑翔机（朝右下）。
 gliderP :: Pattern
 gliderP =
   Pattern "glider"
@@ -71,13 +71,13 @@ gliderP =
     , (0, 2), (1, 2), (2, 2)
     ]
 
--- | Horizontal blinker (period 2).
+-- | 水平闪烁器（周期 2）。
 blinkerP :: Pattern
 blinkerP =
   Pattern "blinker"
     [ (0, 1), (1, 1), (2, 1) ]
 
--- | Toad (period 2).
+-- | 蟾蜍（周期 2）。
 toadP :: Pattern
 toadP =
   Pattern "toad"
@@ -85,7 +85,7 @@ toadP =
     , (0, 1), (1, 1), (2, 1)
     ]
 
--- | Beacon (period 2).
+-- | 信标（周期 2）。
 beaconP :: Pattern
 beaconP =
   Pattern "beacon"
@@ -95,7 +95,7 @@ beaconP =
     , (2, 3), (3, 3)
     ]
 
--- | Pulsar (period 3); bounding box 13×13.
+-- | 脉冲星（周期 3）；包围盒 13×13。
 pulsarP :: Pattern
 pulsarP =
   Pattern "pulsar" $
@@ -104,7 +104,7 @@ pulsarP =
       , [ (x, y) | x <- [0, 5, 7, 12], y <- [2, 3, 4, 8, 9, 10] ]
       ]
 
--- | Lightweight spaceship facing right.
+-- | 轻型飞船（朝右）。
 lwssP :: Pattern
 lwssP =
   Pattern "lwss"
@@ -114,7 +114,7 @@ lwssP =
     , (0, 3), (1, 3), (2, 3), (3, 3)
     ]
 
--- | Convenience: glider stamped near the origin on an empty grid
--- (same layout as the former 'Life.Grid.glider').
+-- | 便捷：空网格上靠近原点盖一艘滑翔机
+-- （布局与原先 'Life.Grid.glider' 相同）。
 glider :: Width -> Height -> Grid
 glider w h = stampPattern gliderP (0, 0) w h

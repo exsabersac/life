@@ -1,5 +1,4 @@
--- | One-generation step for a B/S rule on a finite grid (dead border),
--- and an infinite generation 'Stream'.
+-- | 有限网格上一世代步进（B/S 规则、死边界），以及无穷世代流。
 module Life.Step
   ( neighborCount
   , step
@@ -13,7 +12,7 @@ import           Life.Rule   (Rule, born, survives)
 import           Life.Stream (Stream, headS, iterateS, splitAtS)
 import           Life.Types  (Cell (..), Coord, fromAlive, isAlive)
 
--- | Eight Moore neighbours; out-of-bounds count as dead (dead border).
+-- | 八邻域（Moore）存活数；越界视为死（死边界）。
 neighborCount :: Grid -> Coord -> Int
 neighborCount g (x, y) =
   length
@@ -31,18 +30,20 @@ stepCell rule g c =
        Alive -> fromAlive (survives rule n)
        Dead  -> fromAlive (born rule n)
 
--- | Advance one generation. New array is built in @Ix@ order via @range@.
+-- | 推进一世代。新数组按 @Ix@ 顺序经 @range@ 构建。
 step :: Rule -> Grid -> Grid
 step rule g =
   let bnds = bounds (gridCells g)
       cells = [(c, stepCell rule g c) | c <- range bnds]
   in Grid (array bnds cells)
 
--- | Infinite stream of grids: @g0 :> step r g0 :> step r (step r g0) :> …@.
+-- | 无穷网格流：@g0 :> step r g0 :> step r (step r g0) :> …@。
+--
+-- 用 'iterateS' 构造；消费时配合 'splitAtS' / 'headS'，只强制已取前缀。
 generations :: Rule -> Grid -> Stream Grid
 generations rule = iterateS (step rule)
 
--- | Apply @step@ @n@ times (@n <= 0@ leaves the grid unchanged), via 'generations'.
+-- | 连续应用 @step@ @n@ 次（@n <= 0@ 不改网格），经 'generations' 实现。
 stepN :: Int -> Rule -> Grid -> Grid
 stepN n rule g
   | n <= 0    = g

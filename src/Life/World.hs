@@ -1,4 +1,7 @@
--- | Pure simulation world: inputs fold into World; time advances via 'Life.Stream'.
+-- | 纯仿真世界：输入折叠进 World；时间经 'Life.Stream' 推进。
+--
+-- SDL 壳只负责：轮询事件 → 映射为 'Input' → 'applyInputs' / 'tick' → 绘制。
+-- 存档等 IO 留在边界；加载成功后以 'InSetGrid' 注入。
 module Life.World
   ( World (..)
   , Input (..)
@@ -15,7 +18,7 @@ import           Life.Step    (generations)
 import           Life.Stream  (headS, splitAtS)
 import           Life.Types   (Coord)
 
--- | SDL-facing simulation state (pure).
+-- | 面向 SDL 的仿真状态（纯）。
 data World = World
   { wGrid      :: !Grid
   , wRule      :: !Rule
@@ -23,13 +26,13 @@ data World = World
   , wPresetIx  :: !Int
   , wPatternIx :: !Int
   , wPaused    :: !Bool
-  , wSpeed     :: !Int -- generations per second when running (1..30)
-  , wAccMs     :: !Int
-  , wCellPx    :: !Int
+  , wSpeed     :: !Int -- 运行时每秒世代数（1..30）
+  , wAccMs     :: !Int -- 帧时间累加器（毫秒）
+  , wCellPx    :: !Int -- 单元格像素边长
   , wQuit      :: !Bool
   } deriving (Eq, Show)
 
--- | Keyboard / mouse intents (save IO stays at the edge; load becomes 'InSetGrid').
+-- | 键盘 / 鼠标意图（存盘 IO 在壳层；加载结果变成 'InSetGrid'）。
 data Input
   = InQuit
   | InTogglePause
@@ -44,13 +47,16 @@ data Input
   | InSetGrid Grid
   deriving (Eq, Show)
 
+-- | 初始世界：默认暂停、速度 5 代/秒、单元格 16px。
 initialWorld :: Grid -> Rule -> String -> World
 initialWorld g rule label =
   World g rule label 0 0 True 5 0 16 False
 
+-- | 按序折叠一组输入。
 applyInputs :: [Input] -> World -> World
 applyInputs is w = foldl (flip applyInput) w is
 
+-- | 应用单条输入（纯）。
 applyInput :: Input -> World -> World
 applyInput InQuit w =
   w { wQuit = True }
@@ -91,8 +97,8 @@ cyclePattern w =
       g = stampCentered p (gridWidth (wGrid w)) (gridHeight (wGrid w))
   in w { wPatternIx = (ix + 1) `mod` n, wGrid = g, wPaused = True }
 
--- | Advance by @frameMs@ of wall-clock time. When unpaused, consume @n@
--- generations from 'generations' via 'splitAtS' (not list @iterate@ / @!!@).
+-- | 按墙钟 @frameMs@ 推进。未暂停时，经 'splitAtS' 从 'generations'
+-- 消费 @n@ 代（不用列表 @iterate@ / @!!@）。
 tick :: Int -> World -> World
 tick frameMs w
   | wPaused w = w
